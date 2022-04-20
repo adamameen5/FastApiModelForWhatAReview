@@ -182,18 +182,6 @@ def summarize(review: str):
     print(summary)
     return summary
     
-
-@app.get("/detectSarcasm/{review}")
-def detectSarcasm(review: str):
-    x_final = pd.DataFrame({"headline":[review]})
-    test_lines = CleanTokenize(x_final)
-    test_sequences = tokenizer_obj.texts_to_sequences(test_lines)
-    test_review_pad = pad_sequences(test_sequences, maxlen=max_length, padding='post')
-    pred = model.predict(test_review_pad)
-    pred*=100
-    if pred[0][0]>=50: return "It's a sarcasm!" 
-    else: return "It's not a sarcasm."
-    
     
 def clean_text(text):
     text = text.lower()
@@ -238,6 +226,7 @@ def CleanTokenize(df):
     head_lines = list()
     lines = df["headline"].values.tolist()
     print("called CleanTokenize")
+
     for line in lines:
         line = clean_text(line)
         # tokenize the text
@@ -253,13 +242,25 @@ def CleanTokenize(df):
         head_lines.append(words)
     return head_lines
 
+
+
 head_lines = CleanTokenize(data)
+
+pos_data = data.loc[data['is_sarcastic'] == 1]
+pos_head_lines = CleanTokenize(pos_data)
+pos_lines = [j for sub in pos_head_lines for j in sub] 
+word_could_dict=Counter(pos_lines)
+
+wordcloud = WordCloud(width = 1000, height = 500).generate_from_frequencies(word_could_dict)
+plt.figure(figsize=(15,8))
+plt.imshow(wordcloud)
+plt.axis("off")
+
 
 validation_split = 0.2
 max_length = 25
 
 tokenizer_obj = Tokenizer()
-
 tokenizer_obj.fit_on_texts(head_lines)
 sequences = tokenizer_obj.texts_to_sequences(head_lines)
 
@@ -317,6 +318,8 @@ embedding_layer = Embedding(len(word_index) + 1,
                         weights=[embedding_matrix],
                         input_length=max_length,
                         trainable=False)
+
+
 model = Sequential()
 model.add(embedding_layer)
 model.add(LSTM(64, dropout=0.2, recurrent_dropout=0.25))
@@ -327,6 +330,45 @@ model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['acc'])
 print('Summary of the built model...')
 print(model.summary())
 
+
+history = model.fit(X_train_pad, y_train, batch_size=32, epochs=25, validation_data=(X_test_pad, y_test), verbose=2)
+
+
+# Plot results
+acc = history.history['acc']
+val_acc = history.history['val_acc']
+loss = history.history['loss']
+val_loss = history.history['val_loss']
+
+epochs = range(1, len(acc)+1)
+
+plt.plot(epochs, acc, 'g', label='Training accuracy')
+plt.plot(epochs, val_acc, 'r', label='Validation accuracy')
+plt.title('Training and validation accuracy')
+plt.legend()
+
+plt.figure()
+
+plt.plot(epochs, loss, 'g', label='Training loss')
+plt.plot(epochs, val_loss, 'r', label='Validation loss')
+plt.title('Training and validation loss')
+plt.legend()
+
+plt.show()
+
+
+
+@app.get("/detectSarcasm/{review}")
+def detectSarcasm(review: str):
+    x_final = pd.DataFrame({"headline":[review]})
+    test_lines = CleanTokenize(x_final)
+    test_sequences = tokenizer_obj.texts_to_sequences(test_lines)
+    test_review_pad = pad_sequences(test_sequences, maxlen=max_length, padding='post')
+    pred = model.predict(test_review_pad)
+    print(model.summary())
+    pred*=100
+    if pred[0][0]>=50: return "It's a sarcasm!" 
+    else: return "It's not a sarcasm."
 
 """ Original Review """
 # Our solicitor Umar was fantastic he was introduced to us 10 weeks into the process after quite a lot of delays and quickly got everything resolved. We were really impressed with how fast and responsive he was and I'd highly recommend him. Overall I think Muve is a good option with some very competitive pricing but unfortunately we did experience some delays at the beginning of the process which I think it has to do with the amount of cases they had due to the stamp duty holiday but once our solicitor was assigned things moved really quickly. That's the only reason why I wouldn't give them 5 starts overall and I'd highly recommend getting a solicitor assigned as soon as you start the process. Would not have made the stamp duty deadline without them!  I was selling my existing property and purchasing a new one. It was all smooth sailing until the last few weeks where issues initiated by my buyers side, started to pop up out of nowhere. Umar and Ashleigh, really did everything they could to help me navigate these obstacles and were in constant contact. Keeping me updated and keeping the application on track. Completed on the final day of the stamp duty holiday and saved lots of £££. It was stressful at the end, but we made it.  Thank you both so much!
