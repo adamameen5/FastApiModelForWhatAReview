@@ -231,7 +231,7 @@ def CleanTokenize(df):
         line = clean_text(line)
         # tokenize the text
         tokens = word_tokenize(line)
-        # remove puntuations
+        # remove punctuations
         table = str.maketrans('', '', string.punctuation)
         stripped = [w.translate(table) for w in tokens]
         # remove non alphabetic characters
