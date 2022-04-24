@@ -33,6 +33,28 @@ from collections import Counter
 import sys
 from wordcloud import WordCloud, ImageColorGenerator
 
+#for review rating
+import seaborn as sns
+from wordcloud import WordCloud, STOPWORDS 
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import FunctionTransformer
+from nltk.stem import WordNetLemmatizer
+from nltk.corpus import stopwords
+from sklearn.metrics import f1_score, accuracy_score
+from sklearn import model_selection
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.pipeline import Pipeline
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn import metrics
+import warnings
+import nltk
+import joblib
+
+nltk.download('stopwords')
+nltk.download('wordnet')
+stop = stopwords.words('english')
+warnings.filterwarnings("ignore")
+
 app = FastAPI()
 
 students = {
@@ -357,6 +379,75 @@ plt.legend()
 plt.show()
 
 
+#For review rating---------
+
+#loading data
+data_df = pd.read_csv('tripadvisor_hotel_reviews.csv')
+
+#checking whether there are any missing values
+print(data_df.isnull().sum())
+
+#checking the clas counts
+data_df.Rating.value_counts()
+
+#creating a new dataframe with only the required columns
+df = data_df[['Review', 'Rating']]
+df.head()
+
+#now splitting the data into to Train and test test
+X = df['Review']
+y = df['Rating']
+X_train, X_test, y_train, y_test = train_test_split(X,y, random_state=42,test_size=0.3)
+
+lemmatizer = WordNetLemmatizer()
+def preprocessing(x):
+  #first we make text to lowercase 
+  x = x.apply(lambda x: " ".join(x.lower() for x in x.split()))
+  #remove punctuation
+  x = x.str.replace('[^\w\s]','')
+  #removing stop workds
+  x = x.apply(lambda x: " ".join(x for x in x.split() if x not in stop))
+  #removing digits
+  x = x.str.replace('\d+', '')
+  #lemmatizing
+  x = [lemmatizer.lemmatize(row) for row in x]
+  return x
+
+preprocessor = FunctionTransformer(preprocessing)
+
+tfidf = TfidfVectorizer(analyzer='word', token_pattern=r'\w{1,}', ngram_range=(1,2), max_features=5000)
+nb = MultinomialNB(alpha = 0.6)
+pipeline = Pipeline([
+    ('Preprocessor',preprocessor),
+    ('Tf-Idf', tfidf),
+    ('classifier',nb )
+])
+pipeline.fit(X_train, y_train)
+
+pip_pred = pipeline.predict(X_test)
+print(metrics.classification_report(y_test, pip_pred))
+
+pipeline.predict(pd.Series(['Hey this is the worst place i have been.','this is the best of the best. I love it','its okay, not the best but its okay']))
+
+joblib.dump(pipeline, 'Rating_predictor.pkl', compress = 1)
+
+lemmatizer = WordNetLemmatizer()
+def preprocessing(x):
+  #first we make text to lowercase 
+  x = x.apply(lambda x: " ".join(x.lower() for x in x.split()))
+  #remove punctuation
+  x = x.str.replace('[^\w\s]','')
+  #removing stop workds
+  x = x.apply(lambda x: " ".join(x for x in x.split() if x not in stop))
+  #removing digits
+  x = x.str.replace('\d+', '')
+  #lemmatizing
+  x = [lemmatizer.lemmatize(row) for row in x]
+  return x
+
+preprocessor = FunctionTransformer(preprocessing)
+
+pipeline = joblib.load('Rating_predictor.pkl')
 
 @app.get("/detectSarcasm/{review}")
 def detectSarcasm(review: str):
@@ -369,6 +460,14 @@ def detectSarcasm(review: str):
     pred*=100
     if pred[0][0]>=50: return "It's a sarcasm!" 
     else: return "It's not a sarcasm."
+
+@app.get("/getRating/{review}")
+def getRating(review: str):
+    ratingList=[]
+    ratingList=str(pipeline.predict(pd.Series([review])))
+    print(ratingList)
+    return ratingList
+    
 
 """ Original Review """
 # Our solicitor Umar was fantastic he was introduced to us 10 weeks into the process after quite a lot of delays and quickly got everything resolved. We were really impressed with how fast and responsive he was and I'd highly recommend him. Overall I think Muve is a good option with some very competitive pricing but unfortunately we did experience some delays at the beginning of the process which I think it has to do with the amount of cases they had due to the stamp duty holiday but once our solicitor was assigned things moved really quickly. That's the only reason why I wouldn't give them 5 starts overall and I'd highly recommend getting a solicitor assigned as soon as you start the process. Would not have made the stamp duty deadline without them!  I was selling my existing property and purchasing a new one. It was all smooth sailing until the last few weeks where issues initiated by my buyers side, started to pop up out of nowhere. Umar and Ashleigh, really did everything they could to help me navigate these obstacles and were in constant contact. Keeping me updated and keeping the application on track. Completed on the final day of the stamp duty holiday and saved lots of £££. It was stressful at the end, but we made it.  Thank you both so much!
