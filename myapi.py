@@ -57,6 +57,7 @@ warnings.filterwarnings("ignore")
 
 app = FastAPI()
 
+
 students = {
     1: {
         "name":"John",
@@ -83,7 +84,10 @@ origins = [
     "https://localhost.tiangolo.com",
     "http://localhost",
     "http://localhost:8080",
-    "http://127.0.0.1:5501"
+    "http://127.0.0.1:5501",
+    "http://localhost:8800/WhatAReview_WithPHP",
+    "http://localhost:8800/WhatAReview_WithPHP/",
+    "http://localhost:8800"
 ]
 
 app.add_middleware(
