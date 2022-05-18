@@ -57,27 +57,6 @@ warnings.filterwarnings("ignore")
 
 app = FastAPI()
 
-
-students = {
-    1: {
-        "name":"John",
-        "age":17,
-        "year":"Year 12"
-    }
-}
-
-#this basemodel is used to create a student object. It will define the required values to create a student object
-class Student(BaseModel):
-    name: str
-    age: int
-    year: str
-
-
-class UpdateStudent(BaseModel):
-    name: Optional[str] = None
-    age: Optional[int] = None
-    year: Optional[str] = None
-    
     
 origins = [
     "http://localhost.tiangolo.com",
@@ -108,62 +87,6 @@ data =  pd.concat([data_1, data_2])
 def index():
     return {"name":"First Data"}
 
-
-# creates an end point using the home url followed by /get-student/{student_id}
-# Path parameter
-@app.get("/get-student/{student_id}")
-def get_student(student_id: int = Path(None,description = "The ID of the student you want to view", gt=0)):
-    return students[student_id]
-
-#Query parameter
-@app.get("/get-by-name")
-def get_student(*, name: Optional[str] = None, test : int):
-    for student_id in students:
-        if students[student_id]["name"] == name:
-            return students[student_id]
-    return {"Data": "Not found!"}
-
-
-#Query parameter with a path parameter
-@app.get("/get-by-name/{student_id}")
-def get_student(*, student_id: int , name: Optional[str] = None, test : int):
-    for student_id in students:
-        if students[student_id]["name"] == name:
-            return students[student_id]
-    return {"Data": "Not found!"}
-
-
-#taking a path parameter with an id to create a student object
-@app.post("/create-student/{student_id}")
-def create_student(student_id: int, student: Student):
-    if student_id in students:
-        return {"Error": "Student exists"}
-    students[student_id] = student
-    return students[student_id]
-
-
-#to update a record
-@app.put("/update_student/{student_id}")
-def update_student(student_id : int, student : UpdateStudent):
-    if student_id not in students:
-        return {"Error" : "Student doesn't exist"}
-
-    if student.name != None:
-        students[student_id].name = student.name
-    if student.age != None:
-        students[student_id].age = student.age
-    if student.year != None:
-        students[student_id].year = student.year    
-    return students[student_id]
-
-#to delete a record
-@app.delete("/delete_student/{student_id}")
-def delete_student(student_id: int):
-    if student_id not in students:
-        return {"Error": "Record not found in database"}
-
-    del students[student_id]
-    return {"Message": "Student deleted succesfully"}
 
 
 @app.get("/summarize/{review}")
@@ -211,7 +134,6 @@ def summarize(review: str):
     
 def clean_text(text):
     text = text.lower()
-    
     pattern = re.compile('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
     text = pattern.sub('', text)
     text = " ".join(filter(lambda x:x[0]!='@', text.split()))
@@ -267,7 +189,6 @@ def CleanTokenize(df):
         words = [w for w in words if not w in stop_words]
         head_lines.append(words)
     return head_lines
-
 
 
 head_lines = CleanTokenize(data)
