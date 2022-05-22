@@ -3,6 +3,8 @@ import string
 from fastapi import FastAPI, Path
 from typing import Optional
 from pydantic import BaseModel
+
+#For text summarization
 import spacy
 from spacy.lang.en.stop_words import STOP_WORDS
 from string import punctuation
@@ -11,7 +13,7 @@ from heapq import nlargest
 import json
 from fastapi.middleware.cors import CORSMiddleware
 
-#for sarcasm detection
+#For Sarcasm Detection
 import numpy as np
 import pandas as pd 
 import os
@@ -33,7 +35,7 @@ from collections import Counter
 import sys
 from wordcloud import WordCloud, ImageColorGenerator
 
-#for review rating
+#For Review Rating
 import seaborn as sns
 from wordcloud import WordCloud, STOPWORDS 
 from sklearn.model_selection import train_test_split
@@ -77,9 +79,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+#Get the data For Sarcasm Detection (FSD)
+# FSD START-- 
 data_1 = pd.read_json("Sarcasm_Headlines_Dataset.json", lines=True)
 data_2 = pd.read_json("Sarcasm_Headlines_Dataset_v2.json", lines=True)
 data =  pd.concat([data_1, data_2])
+# FSD END-- 
 
 
 # creates an end point using the home url
@@ -96,7 +101,7 @@ def summarize(review: str):
     doc = nlp(review)
     #tokenization
     tokens = [token.text for token in doc]
-    #remove stop words and punctuations -- part of text cleaning
+    #To pre-process original text by removing stop words and punctuations
     word_frequencies = {}
     for word in doc:
         if word.text.lower() not in stopwords:
@@ -105,9 +110,10 @@ def summarize(review: str):
                     #if the word is introduced for the first time, then the occurance of the word will be 1
                     word_frequencies[word.text] = 1
                 else:
-                    #if the word is already introduced, then the occurance of the word will be increased by 1
+                    #if the word was already introduced, then the count of the word occurence will be increased by 1
                     word_frequencies[word.text] += 1
     max_frequency = max(word_frequencies.values())
+    #To find the normalized frequency
     for word in word_frequencies.keys():
         word_frequencies[word] = word_frequencies[word]/max_frequency
     #Sentence tokenization
@@ -120,20 +126,20 @@ def summarize(review: str):
                     sentence_scores[sent] = word_frequencies[word.text.lower()]
                 else:
                     sentence_scores[sent] += word_frequencies[word.text.lower()]
-    #Get 30 percent of the sentence with the maximum score. 
-    #Result of it will be: the number of sentences that will be in the summary
+    #Get 30 percent of the sentence with the maximum score
     select_length = int(len(sentence_tokens)*0.3)
-    # To get the summary of the text
+    # To get the final summary of the text
     summary = nlargest(select_length,sentence_scores,key=sentence_scores.get)
     final_summary = [word.text for word in summary]
-    #To combine the finaly summary statements to one paragraph
+    #To combine the final summary to one paragraph
     summary = ' '.join(final_summary)
     print(summary)
     return summary
     
-    
+# FSD START--     
 def clean_text(text):
     text = text.lower()
+    #To remove every link from the dataset
     pattern = re.compile('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
     text = pattern.sub('', text)
     text = " ".join(filter(lambda x:x[0]!='@', text.split()))
@@ -167,13 +173,12 @@ def clean_text(text):
     text = re.sub(r"couldn't", "could not", text)
     text = re.sub(r"have't", "have not", text)
     text = re.sub(r"[,.\"\'!@#$%^&*(){}?/;`~:<>+=-]", "", text)
-    print("called clean_text")
     return text
+
 
 def CleanTokenize(df):
     head_lines = list()
     lines = df["headline"].values.tolist()
-    print("called CleanTokenize")
 
     for line in lines:
         line = clean_text(line)
@@ -193,6 +198,7 @@ def CleanTokenize(df):
 
 head_lines = CleanTokenize(data)
 
+#Creating a wordcloud based on the frequencies of the words
 pos_data = data.loc[data['is_sarcastic'] == 1]
 pos_head_lines = CleanTokenize(pos_data)
 pos_lines = [j for sub in pos_head_lines for j in sub] 
@@ -203,7 +209,8 @@ plt.figure(figsize=(15,8))
 plt.imshow(wordcloud)
 plt.axis("off")
 
-
+#Training-Testing and Splitting
+#80% of data used for training, 20% used for testing which is indicated below as 0.2
 validation_split = 0.2
 max_length = 25
 
@@ -267,6 +274,7 @@ embedding_layer = Embedding(len(word_index) + 1,
                         trainable=False)
 
 
+#Building the Recurrent Neural Network (RNN) Model
 model = Sequential()
 model.add(embedding_layer)
 model.add(LSTM(64, dropout=0.2, recurrent_dropout=0.25))
@@ -278,10 +286,11 @@ print('Summary of the built model...')
 print(model.summary())
 
 
+#Training the model with the validated data
 history = model.fit(X_train_pad, y_train, batch_size=32, epochs=25, validation_data=(X_test_pad, y_test), verbose=2)
 
 
-# Plot results
+# Visualizing the training results
 acc = history.history['acc']
 val_acc = history.history['val_acc']
 loss = history.history['loss']
@@ -303,8 +312,10 @@ plt.legend()
 
 plt.show()
 
+# FSD END-- 
 
-#For review rating---------
+
+#For review rating generator---------
 
 #loading data
 data_df = pd.read_csv('tripadvisor_hotel_reviews.csv')
@@ -374,6 +385,8 @@ preprocessor = FunctionTransformer(preprocessing)
 
 pipeline = joblib.load('Rating_predictor.pkl')
 
+
+#Fast API End Points for What A Review
 @app.get("/detectSarcasm/{review}")
 def detectSarcasm(review: str):
     x_final = pd.DataFrame({"headline":[review]})
@@ -393,9 +406,3 @@ def getRating(review: str):
     print(ratingList)
     return ratingList
     
-
-""" Original Review """
-# Our solicitor Umar was fantastic he was introduced to us 10 weeks into the process after quite a lot of delays and quickly got everything resolved. We were really impressed with how fast and responsive he was and I'd highly recommend him. Overall I think Muve is a good option with some very competitive pricing but unfortunately we did experience some delays at the beginning of the process which I think it has to do with the amount of cases they had due to the stamp duty holiday but once our solicitor was assigned things moved really quickly. That's the only reason why I wouldn't give them 5 starts overall and I'd highly recommend getting a solicitor assigned as soon as you start the process. Would not have made the stamp duty deadline without them!  I was selling my existing property and purchasing a new one. It was all smooth sailing until the last few weeks where issues initiated by my buyers side, started to pop up out of nowhere. Umar and Ashleigh, really did everything they could to help me navigate these obstacles and were in constant contact. Keeping me updated and keeping the application on track. Completed on the final day of the stamp duty holiday and saved lots of £££. It was stressful at the end, but we made it.  Thank you both so much!
-
-""" Summarized Review"""
-#Overall I think Muve is a good option with some very competitive pricing but unfortunately we did experience some delays at the beginning of the process which I think it has to do with the amount of cases they had due to the stamp duty holiday but once our solicitor was assigned things moved really quickly. Completed on the final day of the stamp duty holiday and saved lots of £££. Our solicitor Umar was fantastic he was introduced to us 10 weeks into the process after quite a lot of delays and quickly got everything resolved.
